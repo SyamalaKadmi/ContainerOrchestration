@@ -144,3 +144,64 @@ In Kubernetes, we use YAML files to define how our application should run
       minikube service frontend-service
    ```
    - ![HelmDeployment](Images/HelmDeployment.png)
+
+---
+
+### 5. Automate CICD using Jenkins
+1. Install Git, Docker & Kubernetes plugins in Jenkins
+2. Add Dockerhub credentials to the Jenkins
+   - Go to Jenkins Dashboard → Manage Jenkins → Manage Credentials.
+   Add new credentials:
+      - Kind: Username with password
+      - Scope: Global
+      - Username: Your Docker Hub username
+      - Password: Your Docker Hub password
+      - ID: dockerhub-credentials
+3. Jenkins pipeline
+Create a new pipeline:
+   - New Item → Pipeline
+   - Name: MERN_CI_CD_Pipeline
+   - Pipeline: Scripted Pipeline [JenkinsFile](JenkinsFile)
+   ```bash
+   pipeline {
+      agent any
+         environment {
+            DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
+            DOCKER_REPO = 'syam2704'
+         }
+      stages {
+		   stage('Checkout Code') {
+            steps {
+                git url: 'https://github.com/SyamalaKadmi/learnerReportCS_frontend.git', branch: 'main'
+                git url: 'https://github.com/SyamalaKadmi/learnerReportCS_backend.git', branch: 'main'
+            }
+         }
+         
+        stage('Build') {
+            steps {
+                sh 'docker build -t $DOCKER_REPO/frontend-image:latest ./learnerReportCS_frontend'
+                sh 'docker build -t $DOCKER_REPO/backend-image:latest ./learnerReportCS_backend'
+            }
+        }
+        stage('Push to DockerHub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: "$DOCKER_CREDENTIALS_ID", usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+                    sh 'echo "$PASSWORD" | docker login -u "$USERNAME" --password-stdin'
+                    sh 'docker push $DOCKER_REPO/frontend-image:latest'
+                    sh 'docker push $DOCKER_REPO/backend-image:latest'
+                }
+            }
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh 'helm upgrade --install mern-app ./mern-stack'
+               }
+            }
+         }
+   }
+   ```
+4. Save and run the pipeline
+5. Access the application using
+   ```bash
+      kubectl get svc frontend-service
+      http://<minikube-ip>:<node-port>
+   ```
